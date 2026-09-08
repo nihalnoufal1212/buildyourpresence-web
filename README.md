@@ -1,184 +1,80 @@
-# buildyourpresence-web
-BuildYourPresence
+# BuildYourPresence
 
 Create. Customize. Publish. Grow.
 
-BuildYourPresence is a no-code website builder designed for small businesses, creators, freelancers, and local service providers who want a professional online presence without needing to build a website from scratch.
+BuildYourPresence is a no-code website builder for small businesses, local shops, and service providers who want a professional online presence without building a website from scratch.
 
-🚀 What it does
+## What it does
 
-BuildYourPresence lets a business owner:
+A business owner signs up, enters their business details, adds products or services, generates AI content, publishes their page, and gets a shareable public link. Customers can browse the page, add products to an order, and send the order via WhatsApp.
 
-Create a public business website
+## Tech Stack
 
-Add business information, products/services, FAQs, opening hours, location and social links
+- **Frontend:** React + TypeScript + Vite
+- **Styling:** Tailwind CSS
+- **Icons:** lucide-react
+- **Backend:** Supabase (Postgres + Auth + Storage + Edge Functions)
+- **AI:** Google Gemini API via Supabase Edge Function
 
-Use AI-assisted content generation
+## Deployment Guide
 
-Customize themes, colors, layouts, typography, navigation and sections
+### 1. Create a Supabase project
 
-Preview website changes live
+Go to [supabase.com](https://supabase.com) and create a new project. Note your project URL and anon key.
 
-Switch between desktop and mobile preview
+### 2. Run database migrations
 
-Upload/change the business logo
+Apply the SQL files in `supabase/migrations/` in order using the Supabase SQL editor or MCP tools:
 
-Choose between Order and Enquire customer actions
+1. `20260809061935_create_bizkit_schema.sql` — creates `profiles`, `businesses`, and `products` tables with RLS policies
+2. `20260809061946_add_triggers.sql` — auto-creates a profile row when a user signs up
+3. `20260809062013_revoke_trigger_function_execute.sql` — secures the trigger function
+4. `20260907154418_add_slug_hours_address_storage.sql` — adds slug, business hours, address columns and image storage bucket
 
-Let customers contact the business through WhatsApp, phone, email or an external website
+### 3. Configure environment variables
 
-Send product-specific WhatsApp Order or Enquiry messages
+Copy `.env.example` to `.env` and fill in your Supabase credentials:
 
-Publish a public business profile
+```
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key
+```
 
-Share the published website link
+### 4. Set the Gemini API key
 
-🎯 Problem
+Set the `AI_API_KEY` secret on your Supabase project (via the Supabase dashboard or CLI). This key is used by the `ai-generate` edge function to call the Gemini API. It is never exposed to the frontend.
 
-Many small businesses have products or services to offer but do not have a simple, professional website. Building and maintaining one can require technical knowledge, time, or money.
+Optionally set `AI_MODEL` to override the default model (`gemini-flash-latest`).
 
-BuildYourPresence provides a simple flow:
+### 5. Deploy the edge function
 
-Create → Customize → Preview → Publish → Share
+Deploy the `ai-generate` edge function using the Supabase MCP deploy tool or Supabase dashboard. The `supabase/config.toml` file configures the function with JWT verification enabled.
 
-✨ Key Features
+### 6. Build and deploy the frontend
 
-Business setup
+```bash
+npm install
+npm run build
+```
 
-Business category selection
+Deploy the `dist/` folder to any static host (Vercel, Netlify, Cloudflare Pages, etc.). Make sure the hosting provider supports client-side routing (SPA fallback to `index.html`).
 
-Physical / Online / Both business types
+## How publishing works
 
-Business description and tagline
+When a business owner clicks "Publish", the `published` boolean is set to `true` on their business row. The public page at `/b/{slug}` becomes accessible. There is no per-business deployment — all business pages are dynamic routes within the single deployed application.
 
-Address and map link
+## Project Structure
 
-Opening hours
-
-Social media links
-
-Contact methods
-
-Website builder
-
-Live preview
-
-Multiple visual themes
-
-Hero layout options
-
-Content and card styles
-
-Product/service layouts
-
-Button styles
-
-Typography options
-
-Navigation options
-
-Section visibility
-
-Section ordering
-
-Business-specific design recommendations
-
-Manual override of recommendations
-
-Customer experience
-
-Responsive public website
-
-Product/service cards
-
-Product quick view
-
-Product-specific Order messages
-
-Product-specific Enquiry messages
-
-WhatsApp integration
-
-Phone/email/external contact options
-
-FAQ section
-
-Location and opening-hours information
-
-Backend
-
-Supabase authentication
-
-Supabase database
-
-Row Level Security
-
-Business and product CRUD
-
-Public published-business access
-
-Automatic timestamps and profile creation
-
-🛠️ Tech Stack
-
-React
-
-TypeScript
-
-Vite
-
-Tailwind CSS
-
-Supabase
-
-Lucide React
-
-Google Gemini API for AI-assisted content generation
-
-📁 Project Structure
-
+```
 src/
 ├── components/     # Reusable UI components
 ├── context/        # Authentication and business state
-├── lib/            # API, Supabase and shared types
-├── pages/          # Application and public pages
-└── ...
+├── lib/            # API, Supabase, types, storage, SEO helpers
+├── pages/          # Application pages and public business page
 supabase/
-└── migrations/     # Database schema, policies and triggers
+├── config.toml     # Edge function configuration
+├── functions/      # Edge function source (ai-generate)
+└── migrations/     # Database schema, policies, and triggers
+```
 
-🔐 Data & Security
-
-The application uses Supabase Row Level Security so business owners can manage their own business data while published business pages can be viewed publicly.
-
-🌐 Live Demo
-
-https://buildyourpresence.bolt.host
-
-🏆 Hackathon
-
-Built for Hack Devengers 1.0.
-
-The project focuses on solving a practical real-world problem with a functional, responsive and deployable product.
-
-🔮 Future Improvements
-
-Potential future improvements include:
-
-Custom domains
-
-Analytics
-
-Payments and ecommerce
-
-Booking/appointment management
-
-Customer reviews
-
-Advanced SEO controls
-
-Multiple businesses per account
-
-Richer media galleries
-
-Built with ❤️ for small businesses.
-[![Open in Bolt](https://bolt.new/static/open-in-bolt.svg)](https://bolt.new/~/sb1-hgjruqqd)
+Built for small businesses.

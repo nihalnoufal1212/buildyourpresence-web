@@ -1,17 +1,27 @@
+export interface DayHours {
+  day: string;
+  open: string;
+  close: string;
+  closed: boolean;
+}
+
 export interface Business {
   id: string;
   owner_id: string;
   name: string;
+  slug: string | null;
   tagline: string | null;
   description: string | null;
   industry: string | null;
   location: string | null;
+  address: string | null;
   logo_url: string | null;
   primary_color: string | null;
   contact_method: ContactMethod;
   contact_value: string | null;
   published: boolean;
   faqs: Faq[];
+  business_hours: DayHours[];
   created_at: string;
   updated_at: string;
 }
@@ -61,12 +71,14 @@ export const INDUSTRIES = [
   'Home Bakery',
   'Restaurant / Cafe',
   'Salon / Spa',
-  'Tutoring',
+  'Clinic / Pharmacy',
+  'Tutoring / Coaching',
   'Freelance Services',
   'Clothing / Fashion',
   'Handmade Crafts',
   'Local Shop',
   'Fitness / Wellness',
+  'Repair / Service',
   'Photography',
   'Other',
 ] as const;
@@ -113,3 +125,13 @@ export const COLOR_PRESETS = [
   '#c2410c',
   '#0e7490',
 ];
+
+export const DAYS_OF_WEEK = [
+  'monday',
+  'tuesday',
+  'wednesday',
+  'thursday',
+  'friday',
+  'saturday',
+  'sunday',
+] as const;

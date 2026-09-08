@@ -253,12 +253,12 @@ export function DashboardPage() {
             </p>
             <div className="mx-auto mt-3 max-w-md">
               <a
-                href={`/b/${business.id}`}
+                href={`/b/${business.slug || business.id}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="block truncate rounded-lg bg-white px-4 py-2.5 text-sm font-medium text-teal-700 ring-1 ring-teal-200 transition hover:bg-teal-50"
               >
-                {window.location.origin}/b/{business.id}
+                {window.location.origin}/b/{business.slug || business.id}
               </a>
             </div>
           </div>

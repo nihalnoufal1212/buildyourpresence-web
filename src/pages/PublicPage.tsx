@@ -1,10 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { fetchBusinessById, fetchProducts } from '@/lib/api';
+import { fetchBusinessById, fetchBusinessBySlug, fetchProducts } from '@/lib/api';
 import type { Business, Product } from '@/lib/types';
 import { PublicBusinessPage } from '@/components/PublicBusinessPage';
 import { Spinner } from '@/components/ui';
 import { Sparkles, Store } from 'lucide-react';
+import { setDocumentMeta, resetDocumentMeta } from '@/lib/seo';
+
+function isUuid(s: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+}
 
 export function PublicPage() {
   const { businessId } = useParams<{ businessId: string }>();
@@ -21,7 +26,12 @@ export function PublicPage() {
 
     (async () => {
       try {
-        const biz = await fetchBusinessById(businessId);
+        let biz: Business | null = null;
+        if (isUuid(businessId)) {
+          biz = await fetchBusinessById(businessId);
+        } else {
+          biz = await fetchBusinessBySlug(businessId);
+        }
         if (!active) return;
         if (!biz || !biz.published) {
           setNotFound(true);
@@ -32,6 +42,13 @@ export function PublicPage() {
         const prods = await fetchProducts(biz.id);
         if (!active) return;
         setProducts(prods);
+
+        setDocumentMeta({
+          title: `${biz.name}${biz.tagline ? ` — ${biz.tagline}` : ''}`,
+          description: biz.description || biz.tagline || `Visit ${biz.name} on BizKit`,
+          image: biz.logo_url || undefined,
+          url: `${window.location.origin}/b/${biz.slug || biz.id}`,
+        });
       } catch {
         if (active) setNotFound(true);
       } finally {
@@ -43,6 +60,12 @@ export function PublicPage() {
       active = false;
     };
   }, [businessId]);
+
+  useEffect(() => {
+    return () => {
+      resetDocumentMeta();
+    };
+  }, []);
 
   if (loading) {
     return (

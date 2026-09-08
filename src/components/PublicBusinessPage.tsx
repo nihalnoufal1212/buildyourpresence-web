@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { Business, Product, ContactMethod } from '@/lib/types';
 import {
   MessageCircle,
@@ -7,7 +8,23 @@ import {
   MapPin,
   Package,
   HelpCircle,
+  Clock,
+  Plus,
+  Minus,
+  ShoppingCart,
+  X,
+  Navigation,
 } from 'lucide-react';
+import {
+  buildWhatsAppOrderMessage,
+  buildWhatsAppContactMessage,
+  buildWhatsAppUrl,
+  formatPrice,
+  isOpenNow,
+  formatTime,
+  dayLabel,
+  type CartItem,
+} from '@/lib/whatsapp';
 
 export function contactHref(
   method: ContactMethod,
@@ -18,10 +35,7 @@ export function contactHref(
   switch (method) {
     case 'whatsapp': {
       const digits = clean.replace(/[^\d]/g, '');
-      const text = encodeURIComponent(
-        `Hi! I'd like to know more about your products.`
-      );
-      return `https://wa.me/${digits}?text=${text}`;
+      return buildWhatsAppUrl(digits, buildWhatsAppContactMessage({} as Business));
     }
     case 'phone':
       return `tel:${clean.replace(/\s+/g, '')}`;
@@ -34,48 +48,10 @@ export function contactHref(
   }
 }
 
-export function contactLabel(method: ContactMethod): string {
-  switch (method) {
-    case 'whatsapp':
-      return 'Chat on WhatsApp';
-    case 'phone':
-      return 'Call to Order';
-    case 'email':
-      return 'Email Us';
-    case 'link':
-      return 'Order Online';
-    default:
-      return 'Contact';
-  }
-}
-
-export function ContactIcon({ method }: { method: ContactMethod }) {
-  switch (method) {
-    case 'whatsapp':
-      return <MessageCircle size={18} />;
-    case 'phone':
-      return <Phone size={18} />;
-    case 'email':
-      return <Mail size={18} />;
-    case 'link':
-      return <ExternalLink size={18} />;
-    default:
-      return <Phone size={18} />;
-  }
-}
-
-function formatPrice(price: number | null): string {
-  if (price === null || price === undefined) return '';
-  const formatted = new Intl.NumberFormat('en-IN', {
-    maximumFractionDigits: 2,
-  }).format(price);
-  return `₹${formatted}`;
-}
-
-function getInitials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-  return name.slice(0, 2).toUpperCase();
+export function directionsHref(address: string | null, location: string | null): string | null {
+  const query = address || location;
+  if (!query) return null;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
 }
 
 export function PublicBusinessPage({
@@ -86,8 +62,56 @@ export function PublicBusinessPage({
   products: Product[];
 }) {
   const accent = business.primary_color || '#0f766e';
-  const contactUrl = contactHref(business.contact_method, business.contact_value);
   const faqs = business.faqs ?? [];
+  const hours = business.business_hours ?? [];
+  const hasProducts = products.length > 0;
+  const isWhatsApp = business.contact_method === 'whatsapp';
+  const phoneDigits = business.contact_value?.replace(/[^\d]/g, '') || '';
+
+  const [cart, setCart] = useState<Record<string, number>>({});
+  const [cartOpen, setCartOpen] = useState(false);
+
+  const cartItems: CartItem[] = products
+    .filter((p) => cart[p.id] > 0)
+    .map((p) => ({ product: p, quantity: cart[p.id] }));
+
+  const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+  const cartTotal = cartItems.reduce(
+    (sum, item) => sum + (item.product.price ?? 0) * item.quantity,
+    0
+  );
+
+  function addToCart(productId: string) {
+    setCart((prev) => ({ ...prev, [productId]: (prev[productId] || 0) + 1 }));
+  }
+
+  function removeFromCart(productId: string) {
+    setCart((prev) => {
+      const next = { ...prev };
+      if (next[productId] > 1) {
+        next[productId] -= 1;
+      } else {
+        delete next[productId];
+      }
+      return next;
+    });
+  }
+
+  function handleOrderOnWhatsApp() {
+    if (cartItems.length === 0) return;
+    const message = buildWhatsAppOrderMessage(business, cartItems);
+    const url = buildWhatsAppUrl(phoneDigits, message);
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+
+  function handleContactOnly() {
+    if (!business.contact_value) return;
+    const message = buildWhatsAppContactMessage(business);
+    const url = buildWhatsAppUrl(phoneDigits, message);
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+
+  const open = isOpenNow(hours);
 
   return (
     <div className="min-h-screen bg-stone-50">
@@ -126,24 +150,24 @@ export function PublicBusinessPage({
               {business.tagline}
             </p>
           )}
-          {business.location && (
-            <p className="mt-3 inline-flex items-center gap-1.5 text-sm text-white/80">
-              <MapPin size={15} />
-              {business.location}
-            </p>
-          )}
-          {contactUrl && (
-            <a
-              href={contactUrl}
-              target={business.contact_method === 'link' ? '_blank' : undefined}
-              rel="noopener noreferrer"
-              className="mt-6 inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-semibold shadow-lg transition hover:scale-105 hover:shadow-xl"
-              style={{ color: accent }}
-            >
-              <ContactIcon method={business.contact_method} />
-              {contactLabel(business.contact_method)}
-            </a>
-          )}
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-3 text-sm text-white/80">
+            {business.location && (
+              <span className="inline-flex items-center gap-1.5">
+                <MapPin size={15} />
+                {business.location}
+              </span>
+            )}
+            {hours.length > 0 && (
+              <span
+                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                  open ? 'bg-green-500/90 text-white' : 'bg-stone-900/40 text-white'
+                }`}
+              >
+                <Clock size={12} />
+                {open ? 'Open now' : 'Closed now'}
+              </span>
+            )}
+          </div>
         </div>
       </header>
 
@@ -173,18 +197,12 @@ export function PublicBusinessPage({
       )}
 
       {/* Products */}
-      {products.length > 0 && (
+      {hasProducts && (
         <section className="mx-auto max-w-3xl px-4 py-6 sm:py-8">
           <div className="mb-6 flex items-center gap-2">
             <Package size={20} style={{ color: accent }} />
             <h2 className="text-2xl font-bold text-stone-900">
-              {business.industry &&
-              (business.industry.toLowerCase().includes('menu') ||
-                business.industry.toLowerCase().includes('restaurant') ||
-                business.industry.toLowerCase().includes('cafe') ||
-                business.industry.toLowerCase().includes('bakery'))
-                ? 'Our Menu'
-                : 'Our Products'}
+              {getMenuLabel(business.industry)}
             </h2>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -217,7 +235,7 @@ export function PublicBusinessPage({
                         className="shrink-0 text-lg font-bold"
                         style={{ color: accent }}
                       >
-                        {formatPrice(p.price)}
+                        ₹{formatPrice(p.price)}
                       </span>
                     )}
                   </div>
@@ -226,9 +244,50 @@ export function PublicBusinessPage({
                       {p.description}
                     </p>
                   )}
+                  {isWhatsApp && p.price !== null && (
+                    <button
+                      onClick={() => addToCart(p.id)}
+                      className="mt-3 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90"
+                      style={{ backgroundColor: accent }}
+                    >
+                      <Plus size={14} />
+                      Add to order
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
+          </div>
+        </section>
+      )}
+
+      {/* Business Hours */}
+      {hours.length > 0 && (
+        <section className="mx-auto max-w-3xl px-4 py-6 sm:py-8">
+          <div className="mb-6 flex items-center gap-2">
+            <Clock size={20} style={{ color: accent }} />
+            <h2 className="text-2xl font-bold text-stone-900">Hours</h2>
+          </div>
+          <div className="rounded-2xl bg-white p-6 shadow-sm">
+            <div className="space-y-2.5">
+              {hours.map((h) => (
+                <div
+                  key={h.day}
+                  className="flex items-center justify-between border-b border-stone-100 pb-2.5 last:border-0 last:pb-0"
+                >
+                  <span className="text-sm font-medium capitalize text-stone-700">
+                    {h.day}
+                  </span>
+                  {h.closed ? (
+                    <span className="text-sm text-stone-400">Closed</span>
+                  ) : (
+                    <span className="text-sm text-stone-600">
+                      {formatTime(h.open)} — {formatTime(h.close)}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         </section>
       )}
@@ -263,23 +322,211 @@ export function PublicBusinessPage({
           <p className="mt-2 text-white/80">
             We'd love to hear from you. Reach out using your preferred method.
           </p>
-          {contactUrl && (
-            <a
-              href={contactUrl}
-              target={business.contact_method === 'link' ? '_blank' : undefined}
-              rel="noopener noreferrer"
-              className="mt-5 inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-semibold transition hover:scale-105"
-              style={{ color: accent }}
-            >
-              <ContactIcon method={business.contact_method} />
-              {contactLabel(business.contact_method)}
-            </a>
-          )}
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+            {isWhatsApp && (
+              <a
+                href={buildWhatsAppUrl(phoneDigits, buildWhatsAppContactMessage(business))}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-semibold transition hover:scale-105"
+                style={{ color: accent }}
+              >
+                <MessageCircle size={18} />
+                Chat on WhatsApp
+              </a>
+            )}
+            {business.contact_method === 'phone' && business.contact_value && (
+              <a
+                href={`tel:${business.contact_value.replace(/\s+/g, '')}`}
+                className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-semibold transition hover:scale-105"
+                style={{ color: accent }}
+              >
+                <Phone size={18} />
+                Call us
+              </a>
+            )}
+            {business.contact_method === 'email' && business.contact_value && (
+              <a
+                href={`mailto:${business.contact_value}`}
+                className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-semibold transition hover:scale-105"
+                style={{ color: accent }}
+              >
+                <Mail size={18} />
+                Email us
+              </a>
+            )}
+            {business.contact_method === 'link' && business.contact_value && (
+              <a
+                href={business.contact_value.startsWith('http') ? business.contact_value : `https://${business.contact_value}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-semibold transition hover:scale-105"
+                style={{ color: accent }}
+              >
+                <ExternalLink size={18} />
+                Visit link
+              </a>
+            )}
+            {directionsHref(business.address, business.location) && (
+              <a
+                href={directionsHref(business.address, business.location)!}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-full bg-white/20 px-5 py-2.5 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/30"
+              >
+                <Navigation size={18} />
+                Get directions
+              </a>
+            )}
+          </div>
         </div>
         <p className="mt-6 text-center text-xs text-stone-400">
           {business.name} · Powered by BizKit
         </p>
       </section>
+
+      {/* Floating cart bar */}
+      {isWhatsApp && hasProducts && cartCount > 0 && (
+        <div className="fixed bottom-4 left-1/2 z-40 -translate-x-1/2 px-4">
+          <button
+            onClick={() => setCartOpen(true)}
+            className="flex items-center gap-3 rounded-full px-5 py-3 text-sm font-bold text-white shadow-xl transition hover:scale-105"
+            style={{ backgroundColor: accent }}
+          >
+            <ShoppingCart size={18} />
+            {cartCount} item{cartCount === 1 ? '' : 's'}
+            <span className="rounded-full bg-white/25 px-2.5 py-0.5">
+              ₹{formatPrice(cartTotal)}
+            </span>
+          </button>
+        </div>
+      )}
+
+      {/* Cart drawer */}
+      {cartOpen && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
+          <div
+            className="absolute inset-0 bg-stone-900/50 backdrop-blur-sm"
+            onClick={() => setCartOpen(false)}
+          />
+          <div className="relative z-10 w-full max-w-md rounded-t-2xl bg-white p-6 shadow-2xl sm:rounded-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-stone-900">Your order</h2>
+              <button
+                onClick={() => setCartOpen(false)}
+                className="rounded-lg p-1 text-stone-400 transition hover:bg-stone-100"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {cartItems.length === 0 ? (
+              <p className="py-8 text-center text-sm text-stone-500">
+                Your order is empty. Add some items first.
+              </p>
+            ) : (
+              <>
+                <div className="max-h-64 space-y-3 overflow-y-auto">
+                  {cartItems.map((item) => (
+                    <div
+                      key={item.product.id}
+                      className="flex items-center gap-3 rounded-xl border border-stone-200 p-3"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <h3 className="truncate text-sm font-semibold text-stone-900">
+                          {item.product.name}
+                        </h3>
+                        {item.product.price !== null && (
+                          <p className="text-xs text-stone-500">
+                            ₹{formatPrice(item.product.price)} each
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => removeFromCart(item.product.id)}
+                          className="flex h-7 w-7 items-center justify-center rounded-full border border-stone-300 text-stone-600 transition hover:bg-stone-100"
+                        >
+                          <Minus size={14} />
+                        </button>
+                        <span className="w-6 text-center text-sm font-semibold">
+                          {item.quantity}
+                        </span>
+                        <button
+                          onClick={() => addToCart(item.product.id)}
+                          className="flex h-7 w-7 items-center justify-center rounded-full border border-stone-300 text-stone-600 transition hover:bg-stone-100"
+                        >
+                          <Plus size={14} />
+                        </button>
+                      </div>
+                      {item.product.price !== null && (
+                        <span className="w-16 text-right text-sm font-bold text-stone-900">
+                          ₹{formatPrice(item.product.price * item.quantity)}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {cartTotal > 0 && (
+                  <div className="mt-4 flex items-center justify-between border-t border-stone-200 pt-4">
+                    <span className="font-semibold text-stone-900">Total</span>
+                    <span
+                      className="text-xl font-bold"
+                      style={{ color: accent }}
+                    >
+                      ₹{formatPrice(cartTotal)}
+                    </span>
+                  </div>
+                )}
+
+                <button
+                  onClick={handleOrderOnWhatsApp}
+                  className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold text-white transition hover:opacity-90"
+                  style={{ backgroundColor: '#25D366' }}
+                >
+                  <MessageCircle size={18} />
+                  Order on WhatsApp
+                </button>
+                <p className="mt-2 text-center text-xs text-stone-400">
+                  This will open WhatsApp with your order details pre-filled.
+                </p>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}
+
+function getMenuLabel(industry: string | null): string {
+  if (!industry) return 'Our Products';
+  const lower = industry.toLowerCase();
+  if (
+    lower.includes('restaurant') ||
+    lower.includes('cafe') ||
+    lower.includes('bakery')
+  ) {
+    return 'Our Menu';
+  }
+  if (lower.includes('salon') || lower.includes('spa')) {
+    return 'Our Services';
+  }
+  if (lower.includes('clinic') || lower.includes('pharmacy')) {
+    return 'Our Services';
+  }
+  if (lower.includes('tutor') || lower.includes('coach')) {
+    return 'Our Programs';
+  }
+  if (lower.includes('fitness') || lower.includes('gym')) {
+    return 'Our Plans';
+  }
+  return 'Our Products';
 }

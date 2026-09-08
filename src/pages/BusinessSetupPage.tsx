@@ -1,23 +1,38 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Save, Store, ArrowRight } from 'lucide-react';
+import { Save, Store, ArrowRight, Clock } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useBusiness } from '@/context/BusinessContext';
 import {
   fetchBusinessForOwner,
   createBusiness,
   updateBusiness,
+  slugify,
+  checkSlugAvailability,
+  generateUniqueSlug,
 } from '@/lib/api';
 import {
   INDUSTRIES,
   CONTACT_METHODS,
   COLOR_PRESETS,
+  DAYS_OF_WEEK,
   type ContactMethod,
+  type DayHours,
 } from '@/lib/types';
 import { OwnerShell, Spinner, ErrorState } from '@/components/ui';
 import { Button } from '@/components/Button';
 import { AiButton } from '@/components/AiButton';
+import { ImageUpload } from '@/components/ImageUpload';
 import { useToast } from '@/components/Toast';
+
+function defaultHours(): DayHours[] {
+  return DAYS_OF_WEEK.map((day) => ({
+    day,
+    open: '09:00',
+    close: '18:00',
+    closed: day === 'sunday',
+  }));
+}
 
 export function BusinessSetupPage() {
   const { session } = useAuth();
@@ -30,14 +45,20 @@ export function BusinessSetupPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [name, setName] = useState('');
+  const [slug, setSlug] = useState('');
+  const [slugEdited, setSlugEdited] = useState(false);
+  const [slugAvailable, setSlugAvailable] = useState(true);
   const [industry, setIndustry] = useState('');
   const [location, setLocation] = useState('');
+  const [address, setAddress] = useState('');
   const [description, setDescription] = useState('');
   const [tagline, setTagline] = useState('');
-  const [logoUrl, setLogoUrl] = useState('');
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [primaryColor, setPrimaryColor] = useState(COLOR_PRESETS[0]);
   const [contactMethod, setContactMethod] = useState<ContactMethod>('whatsapp');
   const [contactValue, setContactValue] = useState('');
+  const [hours, setHours] = useState<DayHours[]>(defaultHours());
+  const [hoursEnabled, setHoursEnabled] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
   async function load() {
@@ -49,14 +70,21 @@ export function BusinessSetupPage() {
       if (biz) {
         setBusiness(biz);
         setName(biz.name || '');
+        setSlug(biz.slug || '');
+        setSlugEdited(!!biz.slug);
         setIndustry(biz.industry || '');
         setLocation(biz.location || '');
+        setAddress(biz.address || '');
         setDescription(biz.description || '');
         setTagline(biz.tagline || '');
-        setLogoUrl(biz.logo_url || '');
+        setLogoUrl(biz.logo_url || null);
         setPrimaryColor(biz.primary_color || COLOR_PRESETS[0]);
         setContactMethod(biz.contact_method || 'whatsapp');
         setContactValue(biz.contact_value || '');
+        if (biz.business_hours && biz.business_hours.length > 0) {
+          setHours(biz.business_hours);
+          setHoursEnabled(true);
+        }
       }
     } catch {
       setError('Could not load your business details.');
@@ -68,6 +96,43 @@ export function BusinessSetupPage() {
   useEffect(() => {
     load();
   }, [session?.user.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!slugEdited && name.trim()) {
+      setSlug(slugify(name));
+    }
+  }, [name, slugEdited]);
+
+  useEffect(() => {
+    if (!slug.trim()) {
+      setSlugAvailable(true);
+      return;
+    }
+    let active = true;
+    const timeout = setTimeout(async () => {
+      try {
+        const available = await checkSlugAvailability(
+          slugify(slug),
+          business?.id
+        );
+        if (active) setSlugAvailable(available);
+      } catch {
+        // ignore
+      }
+    }, 400);
+    return () => {
+      active = false;
+      clearTimeout(timeout);
+    };
+  }, [slug, business?.id]);
+
+  function updateHour(day: string, field: keyof DayHours, value: string | boolean) {
+    setHours((prev) =>
+      prev.map((h) =>
+        h.day === day ? { ...h, [field]: value } : h
+      )
+    );
+  }
 
   async function handleSave(e: FormEvent) {
     e.preventDefault();
@@ -82,18 +147,31 @@ export function BusinessSetupPage() {
       return;
     }
 
+    let finalSlug = slug.trim() ? slugify(slug) : '';
+    if (finalSlug) {
+      if (!slugAvailable) {
+        setFormError('That URL is already taken. Try a different one.');
+        return;
+      }
+    } else {
+      finalSlug = await generateUniqueSlug(name, business?.id);
+    }
+
     setSaving(true);
     try {
       const input = {
         name: name.trim(),
+        slug: finalSlug,
         industry: industry || null,
         location: location.trim() || null,
+        address: address.trim() || null,
         description: description.trim() || null,
         tagline: tagline.trim() || null,
-        logo_url: logoUrl.trim() || null,
+        logo_url: logoUrl,
         primary_color: primaryColor,
         contact_method: contactMethod,
         contact_value: contactValue.trim(),
+        business_hours: hoursEnabled ? hours : [],
       };
 
       if (business) {
@@ -161,9 +239,38 @@ export function BusinessSetupPage() {
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Zuckerbowl"
+                placeholder="e.g. Green Leaf Bakery"
                 className={inputCls}
               />
+            </Field>
+            <Field
+              label="Public URL"
+              help={`${window.location.origin}/b/${slug.trim() ? slugify(slug) : 'your-business'}`}
+            >
+              <div className="flex items-center gap-2">
+                <span className="shrink-0 text-sm text-stone-400">
+                  /b/
+                </span>
+                <input
+                  value={slug}
+                  onChange={(e) => {
+                    setSlug(e.target.value);
+                    setSlugEdited(true);
+                  }}
+                  placeholder="green-leaf-bakery"
+                  className={inputCls}
+                />
+              </div>
+              {slugEdited && slug.trim() && !slugAvailable && (
+                <p className="mt-1.5 text-xs font-medium text-red-600">
+                  This URL is already taken. Try another.
+                </p>
+              )}
+              {slugEdited && slug.trim() && slugAvailable && (
+                <p className="mt-1.5 text-xs font-medium text-teal-600">
+                  This URL is available.
+                </p>
+              )}
             </Field>
             <Field label="Business type / industry">
               <select
@@ -179,12 +286,21 @@ export function BusinessSetupPage() {
                 ))}
               </select>
             </Field>
-            <Field label="Location">
+            <Field label="Location" help="General area or city shown on your page.">
               <input
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
                 placeholder="e.g. Vijayawada"
                 className={inputCls}
+              />
+            </Field>
+            <Field label="Address" help="Full street address — used for 'Get Directions' on your page.">
+              <textarea
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder="e.g. 123 MG Road, Labbipet, Vijayawada, AP 520010"
+                rows={2}
+                className={`${inputCls} resize-none`}
               />
             </Field>
           </Section>
@@ -243,6 +359,18 @@ export function BusinessSetupPage() {
             </Field>
           </Section>
 
+          {/* Logo */}
+          <Section title="Logo">
+            <ImageUpload
+              value={logoUrl}
+              onChange={setLogoUrl}
+              kind="logo"
+              label="Upload your business logo (JPG, PNG, WebP — max 4 MB)"
+              shape="square"
+              size={96}
+            />
+          </Section>
+
           {/* Contact */}
           <Section title="How customers reach you">
             <Field label="Contact method">
@@ -277,16 +405,75 @@ export function BusinessSetupPage() {
             </Field>
           </Section>
 
+          {/* Business Hours */}
+          <Section
+            title="Business hours"
+            action={
+              <label className="flex items-center gap-2 text-sm text-stone-600">
+                <input
+                  type="checkbox"
+                  checked={hoursEnabled}
+                  onChange={(e) => setHoursEnabled(e.target.checked)}
+                  className="h-4 w-4 rounded border-stone-300 text-teal-600 focus:ring-teal-600"
+                />
+                Show hours
+              </label>
+            }
+          >
+            {hoursEnabled ? (
+              <div className="space-y-2">
+                {hours.map((h) => (
+                  <div
+                    key={h.day}
+                    className="flex items-center gap-3 rounded-lg border border-stone-200 px-3 py-2"
+                  >
+                    <span className="w-24 shrink-0 text-sm font-medium capitalize text-stone-700">
+                      {h.day}
+                    </span>
+                    <label className="flex items-center gap-1.5 text-xs text-stone-500">
+                      <input
+                        type="checkbox"
+                        checked={!h.closed}
+                        onChange={(e) => updateHour(h.day, 'closed', !e.target.checked)}
+                        className="h-4 w-4 rounded border-stone-300 text-teal-600 focus:ring-teal-600"
+                      />
+                      Open
+                    </label>
+                    {!h.closed && (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="time"
+                          value={h.open}
+                          onChange={(e) => updateHour(h.day, 'open', e.target.value)}
+                          className="rounded-lg border border-stone-300 px-2 py-1 text-sm text-stone-700 focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/20"
+                        />
+                        <span className="text-xs text-stone-400">to</span>
+                        <input
+                          type="time"
+                          value={h.close}
+                          onChange={(e) => updateHour(h.day, 'close', e.target.value)}
+                          className="rounded-lg border border-stone-300 px-2 py-1 text-sm text-stone-700 focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/20"
+                        />
+                      </div>
+                    )}
+                    {h.closed && (
+                      <span className="text-xs font-medium text-stone-400">
+                        Closed
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-sm text-stone-400">
+                <Clock size={16} />
+                Enable to add opening hours to your page.
+              </div>
+            )}
+          </Section>
+
           {/* Branding */}
           <Section title="Branding">
-            <Field label="Logo URL (optional)" help="Paste an image link for your logo.">
-              <input
-                value={logoUrl}
-                onChange={(e) => setLogoUrl(e.target.value)}
-                placeholder="https://…"
-                className={inputCls}
-              />
-            </Field>
             <Field label="Primary brand color">
               <div className="flex flex-wrap items-center gap-2.5">
                 {COLOR_PRESETS.map((c) => (

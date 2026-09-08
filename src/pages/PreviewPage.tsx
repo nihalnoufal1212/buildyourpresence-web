@@ -8,6 +8,7 @@ import {
   Check,
   ExternalLink,
   AlertCircle,
+  Share2,
 } from 'lucide-react';
 import { useBusiness } from '@/context/BusinessContext';
 import { fetchProducts, updateBusiness } from '@/lib/api';
@@ -65,14 +66,30 @@ export function PreviewPage() {
     }
   }
 
+  const publicSlug = business?.slug || business?.id || '';
+  const publicUrl = `${window.location.origin}/b/${publicSlug}`;
+
   function copyLink() {
-    if (!business) return;
-    const url = `${window.location.origin}/b/${business.id}`;
-    navigator.clipboard.writeText(url).then(() => {
+    navigator.clipboard.writeText(publicUrl).then(() => {
       setCopied(true);
       toast('Link copied to clipboard.');
       setTimeout(() => setCopied(false), 2000);
     });
+  }
+
+  function shareLink() {
+    const shareData = {
+      title: business?.name || 'My business page',
+      text: business?.tagline || `Check out ${business?.name}!`,
+      url: publicUrl,
+    };
+    if (navigator.share) {
+      navigator.share(shareData).catch(() => {
+        // user cancelled — no action needed
+      });
+    } else {
+      copyLink();
+    }
   }
 
   if (loading) {
@@ -113,8 +130,6 @@ export function PreviewPage() {
     );
   }
 
-  const publicUrl = `${window.location.origin}/b/${business.id}`;
-
   return (
     <OwnerShell>
       <div className="mx-auto max-w-5xl">
@@ -151,7 +166,7 @@ export function PreviewPage() {
               {business.published ? 'Published' : 'Draft'}
             </span>
             {business.published && (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <code className="hidden truncate rounded-lg bg-stone-100 px-3 py-1.5 text-xs text-stone-600 sm:block">
                   {publicUrl}
                 </code>
@@ -171,6 +186,13 @@ export function PreviewPage() {
                   <ExternalLink size={13} />
                   Open
                 </a>
+                <button
+                  onClick={shareLink}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 px-3 py-1.5 text-xs font-medium text-stone-700 transition hover:bg-stone-50"
+                >
+                  <Share2 size={13} />
+                  Share
+                </button>
               </div>
             )}
           </div>
@@ -185,13 +207,13 @@ export function PreviewPage() {
 
         {/* Published confirmation banner */}
         {business.published && (
-          <div className="mt-4 flex items-center gap-3 rounded-2xl border border-teal-200 bg-teal-50 p-5">
+          <div className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl border border-teal-200 bg-teal-50 p-5">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-teal-600 text-white">
               <Check size={20} />
             </div>
-            <div>
+            <div className="min-w-0 flex-1">
               <p className="font-semibold text-teal-800">
-                Your business is live!
+                Your website is LIVE!
               </p>
               <p className="text-sm text-teal-700">
                 Share this link with your customers:{' '}
@@ -205,6 +227,13 @@ export function PreviewPage() {
                 </a>
               </p>
             </div>
+            <button
+              onClick={shareLink}
+              className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-700"
+            >
+              <Share2 size={16} />
+              Share website
+            </button>
           </div>
         )}
 

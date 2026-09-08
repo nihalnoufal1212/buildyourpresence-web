@@ -19,6 +19,7 @@ import type { Product } from '@/lib/types';
 import { OwnerShell, EmptyState, Spinner, ErrorState } from '@/components/ui';
 import { Button } from '@/components/Button';
 import { AiButton } from '@/components/AiButton';
+import { ImageUpload } from '@/components/ImageUpload';
 import { useToast } from '@/components/Toast';
 import { useLockBodyScroll } from '@/components/ui';
 
@@ -27,7 +28,7 @@ interface EditState {
   name: string;
   description: string;
   price: string;
-  imageUrl: string;
+  imageUrl: string | null;
 }
 
 const EMPTY: EditState = {
@@ -35,7 +36,7 @@ const EMPTY: EditState = {
   name: '',
   description: '',
   price: '',
-  imageUrl: '',
+  imageUrl: null,
 };
 
 export function CatalogPage() {
@@ -78,7 +79,7 @@ export function CatalogPage() {
       name: p.name,
       description: p.description || '',
       price: p.price !== null ? String(p.price) : '',
-      imageUrl: p.image_url || '',
+      imageUrl: p.image_url || null,
     });
   }
 
@@ -103,7 +104,7 @@ export function CatalogPage() {
         name: editing.name.trim(),
         description: editing.description.trim() || null,
         price: priceNum,
-        image_url: editing.imageUrl.trim() || null,
+        image_url: editing.imageUrl,
       };
       if (editing.id) {
         const updated = await updateProduct(editing.id, input);
@@ -350,15 +351,16 @@ export function CatalogPage() {
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium text-stone-700">
-                Image URL (optional)
+                Product image
               </label>
-              <input
+              <ImageUpload
                 value={editing.imageUrl}
-                onChange={(e) =>
-                  setEditing({ ...editing, imageUrl: e.target.value })
+                onChange={(url) =>
+                  setEditing({ ...editing, imageUrl: url })
                 }
-                placeholder="https://…"
-                className={inputCls}
+                kind="product"
+                label="Upload a product photo (JPG, PNG, WebP — max 4 MB)"
+                size={80}
               />
             </div>
           </div>
