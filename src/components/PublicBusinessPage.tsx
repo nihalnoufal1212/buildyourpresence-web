@@ -22,7 +22,6 @@ import {
   formatPrice,
   isOpenNow,
   formatTime,
-  dayLabel,
   type CartItem,
 } from '@/lib/whatsapp';
 
@@ -35,7 +34,7 @@ export function contactHref(
   switch (method) {
     case 'whatsapp': {
       const digits = clean.replace(/[^\d]/g, '');
-      return buildWhatsAppUrl(digits, buildWhatsAppContactMessage({} as Business));
+      return buildWhatsAppUrl(digits, "Hi! I'd like to know more about your business.");
     }
     case 'phone':
       return `tel:${clean.replace(/\s+/g, '')}`;
@@ -100,13 +99,6 @@ export function PublicBusinessPage({
   function handleOrderOnWhatsApp() {
     if (cartItems.length === 0) return;
     const message = buildWhatsAppOrderMessage(business, cartItems);
-    const url = buildWhatsAppUrl(phoneDigits, message);
-    window.open(url, '_blank', 'noopener,noreferrer');
-  }
-
-  function handleContactOnly() {
-    if (!business.contact_value) return;
-    const message = buildWhatsAppContactMessage(business);
     const url = buildWhatsAppUrl(phoneDigits, message);
     window.open(url, '_blank', 'noopener,noreferrer');
   }
