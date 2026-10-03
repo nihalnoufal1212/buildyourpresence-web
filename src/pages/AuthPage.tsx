@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Sparkles, Mail, Lock, ArrowLeft } from 'lucide-react';
+import { Sparkles, Mail, Lock, ArrowLeft, MailCheck } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/Button';
 import { useToast } from '@/components/Toast';
@@ -15,6 +15,8 @@ export function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [resetMode, setResetMode] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
 
   const from =
     (location.state as { from?: string } | null)?.from ?? '/app';
@@ -63,6 +65,146 @@ export function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleResetPassword(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+
+    if (!email.trim()) {
+      setError('Please enter your email address.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { error: resetError } =
+        await supabase.auth.resetPasswordForEmail(email.trim(), {
+          redirectTo: window.location.origin + '/reset-password',
+        });
+      if (resetError) throw resetError;
+      setResetSent(true);
+      toast('Password reset link sent to your email.');
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : 'Something went wrong.';
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (resetMode) {
+    return (
+      <div className="flex min-h-screen flex-col bg-stone-50">
+        <div className="flex flex-1 items-center justify-center px-4 py-12">
+          <div className="w-full max-w-md">
+            <Link
+              to="/"
+              className="mb-6 inline-flex items-center gap-1.5 text-sm font-medium text-stone-500 transition hover:text-stone-800"
+            >
+              <ArrowLeft size={15} />
+              Back to home
+            </Link>
+
+            <div className="rounded-3xl border border-stone-200 bg-white p-8 shadow-sm">
+              <div className="mb-6 flex items-center gap-2">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-teal-700 text-white">
+                  <Sparkles size={18} />
+                </div>
+                <span className="text-xl font-semibold tracking-tight text-stone-900">
+                  BizKit
+                </span>
+              </div>
+
+              {resetSent ? (
+                <div className="text-center">
+                  <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-50 text-teal-700">
+                    <MailCheck size={28} />
+                  </div>
+                  <h1 className="text-2xl font-bold tracking-tight text-stone-900">
+                    Check your email
+                  </h1>
+                  <p className="mt-2 text-sm text-stone-500">
+                    We sent a password reset link to{' '}
+                    <span className="font-semibold text-stone-700">
+                      {email}
+                    </span>
+                    . Click the link in the email to set a new password.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setResetMode(false);
+                      setResetSent(false);
+                    }}
+                    className="mt-6 text-sm font-semibold text-teal-700 hover:text-teal-800"
+                  >
+                    Back to sign in
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <h1 className="text-2xl font-bold tracking-tight text-stone-900">
+                    Reset your password
+                  </h1>
+                  <p className="mt-1.5 text-sm text-stone-500">
+                    Enter your email and we'll send you a link to set a new
+                    password.
+                  </p>
+
+                  <form onSubmit={handleResetPassword} className="mt-6 space-y-4">
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-stone-700">
+                        Email
+                      </label>
+                      <div className="relative">
+                        <Mail
+                          size={17}
+                          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"
+                        />
+                        <input
+                          type="email"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          placeholder="you@example.com"
+                          className="w-full rounded-xl border border-stone-300 bg-white py-2.5 pl-10 pr-3 text-sm text-stone-900 placeholder:text-stone-400 focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/20"
+                          autoComplete="email"
+                          autoFocus
+                        />
+                      </div>
+                    </div>
+
+                    {error && (
+                      <div className="rounded-lg bg-red-50 px-3 py-2.5 text-sm font-medium text-red-700">
+                        {error}
+                      </div>
+                    )}
+
+                    <Button
+                      type="submit"
+                      loading={loading}
+                      className="w-full"
+                    >
+                      Send reset link
+                    </Button>
+                  </form>
+
+                  <p className="mt-5 text-center text-sm text-stone-500">
+                    Remembered your password?{' '}
+                    <button
+                      onClick={() => setResetMode(false)}
+                      className="font-semibold text-teal-700 hover:text-teal-800"
+                    >
+                      Back to sign in
+                    </button>
+                  </p>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -118,9 +260,20 @@ export function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
               </div>
 
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-stone-700">
-                  Password
-                </label>
+                <div className="mb-1.5 flex items-center justify-between">
+                  <label className="block text-sm font-medium text-stone-700">
+                    Password
+                  </label>
+                  {!isSignup && (
+                    <button
+                      type="button"
+                      onClick={() => setResetMode(true)}
+                      className="text-sm font-medium text-teal-700 transition hover:text-teal-800"
+                    >
+                      Forgot password?
+                    </button>
+                  )}
+                </div>
                 <div className="relative">
                   <Lock
                     size={17}

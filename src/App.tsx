@@ -12,6 +12,7 @@ import { ContentPage } from '@/pages/ContentPage';
 import { PreviewPage } from '@/pages/PreviewPage';
 import { PublicPage } from '@/pages/PublicPage';
 import { ExamplePage } from '@/pages/ExamplePage';
+import { ResetPasswordPage } from '@/pages/ResetPasswordPage';
 
 export default function App() {
   return (
@@ -23,6 +24,7 @@ export default function App() {
             <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<AuthPage mode="login" />} />
             <Route path="/signup" element={<AuthPage mode="signup" />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route path="/b/example" element={<ExamplePage />} />
             <Route path="/b/:businessId" element={<PublicPage />} />
 
